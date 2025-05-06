@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">SmartSole</string>
     <string name="welcome_message">Welcome to the Smart Shoe App!</string>
-    <string name="footprint_description">Smartsole image</string>
+    <string name="icon_description">Landing Page image</string>
 </resources>

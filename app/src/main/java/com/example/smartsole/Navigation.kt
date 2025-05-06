@@ -5,32 +5,45 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-// Below are the current three different screens for our app
-// Landing: landing page that user first approaches
-// Graph: contains the pressure mapping of foot
-// Data: contains just general basic data chart of data
 enum class Screen {
     Landing,
+    Home,
     Graph,
     Data
 }
 
-// Manages transitions from different screens
 @Composable
 fun Navigation() {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = Screen.Landing.name) {
         composable(Screen.Landing.name) {
             LandingScreen(
-                onViewPressurePlotClicked = { navController.navigate(Screen.Graph.name) },
-                onViewPressureDataClicked = { navController.navigate(Screen.Data.name) }
+                // "Get Started" button now navigates to the Home screen
+                onGetStartedClicked = { navController.navigate(Screen.Home.name) }
+            )
+        }
+        composable(Screen.Home.name) {
+            // Composable for the new Home screen
+            HomePage(
+                // "Start Recording Data" button (define navigation later if needed)
+                onStartRecordingClicked = { /* TODO: Implement navigation for Start Recording */ },
+                // "View Graph" button navigates to the Graph screen
+                onViewGraphClicked = { navController.navigate(Screen.Graph.name) },
+                // Back button on Home navigates back to Landing
+                onBackClicked = { navController.navigate(Screen.Landing.name) }
             )
         }
         composable(Screen.Graph.name) {
-            GraphScreen(onBackClicked = { navController.navigate(Screen.Landing.name) })
+            GraphScreen(
+                // Back button on Graph now navigates back to Home
+                onBackClicked = { navController.navigate(Screen.Home.name) }
+            )
         }
         composable(Screen.Data.name) {
-            DataScreen(onBackClicked = { navController.navigate(Screen.Landing.name) })
+            DataScreen(
+                // Back button on Data now navigates back to Home
+                onBackClicked = { navController.navigate(Screen.Home.name) }
+            )
         }
     }
 }

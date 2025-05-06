@@ -15,7 +15,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitAndroidJUnitRunner"
     }
 
     buildTypes {
@@ -48,7 +48,16 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+    implementation(libs.androidx.material3) // This is your correct Material 3 dependency
+
+    // Removed the redundant and incomplete Material 3 dependency below:
+    // implementation("androidx.compose.material3:material3:<version>")
+
+    // You might also have material icons - keep these if you use them
+    implementation("androidx.compose.material:material-icons-core:<version>") // Make sure <version> is replaced with the actual version
+    implementation("androidx.compose.material:material-icons-extended:<version>") // Make sure <version> is replaced with the actual version
+
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -56,5 +65,6 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
     implementation("androidx.navigation:navigation-compose:2.7.7")
 }
