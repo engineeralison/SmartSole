@@ -1,5 +1,6 @@
 package com.example.smartsole
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -7,19 +8,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.smartsole.ui.theme.Beige // Your primary beige color
-import com.example.smartsole.Header
-// Define some beige variants for the radial gradient
-val CenterBeige = Color(0xFFF5F5DC) // Lighter beige for the center
-val OuterBeige = Color(0xFFC3B091) // Darker beige for the outer edges
+import com.example.smartsole.ui.theme.Beige
+
+val CenterBeige = Color(0xFFF5F5DC)
+val OuterBeige = Color(0xFFC3B091)
 
 @Composable
 fun HomePage(
@@ -28,6 +29,11 @@ fun HomePage(
     onBackClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val bluetoothHelper = remember { BluetoothHelper(context) }
+    var isConnected by remember { mutableStateOf(false) }
+    var isScanning by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -39,10 +45,8 @@ fun HomePage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp), // Apply horizontal padding here
-            // No verticalArrangement or Spacers for top-down layout
+                .padding(horizontal = 16.dp)
         ) {
-            // Small description above title
             Text(
                 text = "Everyday we're running",
                 style = MaterialTheme.typography.bodyMedium,
@@ -51,7 +55,6 @@ fun HomePage(
                     .align(Alignment.Start)
             )
 
-            // "Hello User!" title
             Text(
                 text = "Hello User!",
                 style = MaterialTheme.typography.headlineLarge,
@@ -61,23 +64,19 @@ fun HomePage(
                     .align(Alignment.Start)
             )
 
-            // Container for "My Plan" and buttons with radial gradient backdrop
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.9f) // Container takes up 90% of the width
-                    .wrapContentHeight() // Wrap content to take minimum height
+                    .fillMaxWidth(0.9f)
+                    .wrapContentHeight()
                     .background(
-                        brush = Brush.radialGradient( // Apply a radial gradient
-                            colors = listOf(CenterBeige, OuterBeige) // Colors for radial gradient
-                        ),
-                        shape = MaterialTheme.shapes.medium // Optional: rounded corners
+                        brush = Brush.radialGradient(colors = listOf(CenterBeige, OuterBeige)),
+                        shape = MaterialTheme.shapes.medium
                     )
-                    .padding(24.dp) // Increased padding inside the gradient container
-                    .align(Alignment.CenterHorizontally), // Center this container horizontally
-                horizontalAlignment = Alignment.CenterHorizontally, // Center content within the gradient container
-                verticalArrangement = Arrangement.spacedBy(16.dp) // Increased spacing between items in this column
+                    .padding(24.dp)
+                    .align(Alignment.CenterHorizontally),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // "My Plan" subtitle inside the gradient container
                 Text(
                     text = "My Plan",
                     style = MaterialTheme.typography.titleLarge,
@@ -87,34 +86,49 @@ fun HomePage(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Column to center the buttons within the gradient container
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp) // Increased spacing between buttons
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // "Start Recording Data" button
                     Button(
-                        onClick = onStartRecordingClicked,
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f), // Buttons fill 90% of the container width
+                        onClick = {
+                            if (isConnected) {
+                                bluetoothHelper.disconnect()
+                                isConnected = false
+                            } else if (!isScanning) {
+                                if (bluetoothHelper.isBluetoothEnabled()) {
+                                    isScanning = true
+                                    bluetoothHelper.startScanning { device ->
+                                        Toast.makeText(context, "Connecting to ${device.name}", Toast.LENGTH_SHORT).show()
+                                        bluetoothHelper.connectToDevice(device) { connected ->
+                                            isConnected = connected
+                                            if (connected) {
+                                                Toast.makeText(context, "Connected to ${device.name}", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "Disconnected from ${device.name}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Please enable Bluetooth", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(0.9f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
                     ) {
                         Text(
-                            "Start Recording Data",
+                            if (isConnected) "Disconnect Device" else "Connect Device",
                             color = Color.White,
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-
-                    // "View Graph" button
                     Button(
                         onClick = onViewGraphClicked,
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f), // Buttons fill 90% of the container width
+                        modifier = Modifier.fillMaxWidth(0.9f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
                     ) {
                         Text(
