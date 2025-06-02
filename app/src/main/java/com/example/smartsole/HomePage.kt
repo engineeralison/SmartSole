@@ -1,3 +1,4 @@
+// HomePage.kt (Updated)
 package com.example.smartsole
 
 import androidx.compose.foundation.Image
@@ -12,10 +13,10 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun HomePage(
-    onStartRecordingClicked: () -> Unit, // This parameter is still present but noted as not used in the current layout
+    onStartRecordingClicked: () -> Unit,
     onViewGraphClicked: () -> Unit,
-    onViewHistoryClicked: () -> Unit,  // <-- ADDED: New parameter for history navigation
-    onBackClicked: () -> Unit,          // This parameter is still present but noted as not used in the current layout
+    onViewHistoryClicked: () -> Unit,
+    onBackClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -34,10 +35,10 @@ fun HomePage(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp) // Add space between children of the Column
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Spacer to push content down the screen
-            Spacer(modifier = Modifier.height(170.dp)) // Adjust this to control top spacing
+            Spacer(modifier = Modifier.height(170.dp))
 
             // Pressure Plot Button
             Image(
@@ -46,22 +47,18 @@ fun HomePage(
                 modifier = Modifier
                     .width(230.dp)
                     .height(180.dp)
-                    .clickable(onClick = onViewGraphClicked) // Correct: uses onViewGraphClicked
+                    .clickable(onClick = onViewGraphClicked)
             )
 
-            // Foot History Button
+            // Foot History Button - Now navigates to Bluetooth sensor page
             Image(
                 painter = painterResource(id = R.drawable.foot_history),
-                contentDescription = "Foot History", // This is the button we're targeting
+                contentDescription = "Foot History",
                 modifier = Modifier
                     .width(240.dp)
                     .height(140.dp)
-                    .clickable(onClick = onViewHistoryClicked) // <-- CHANGED: Now uses onViewHistoryClicked
+                    .clickable(onClick = onViewHistoryClicked) // Goes to Bluetooth sensor page
             )
-
-            // If you need more specific spacing only between the two images,
-            // you can add a Spacer explicitly:
-            // Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
