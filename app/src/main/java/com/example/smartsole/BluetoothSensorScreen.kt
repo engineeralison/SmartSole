@@ -1,4 +1,3 @@
-// BluetoothSensorScreen.kt (Updated with back navigation)
 package com.example.smartsole
 
 import android.Manifest
@@ -10,6 +9,9 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -18,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +28,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BluetoothConnected
+import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,10 +63,14 @@ data class SensorPacket(
     val connectionStatus: String = "DISC"
 )
 
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BluetoothSensorScreen(
-    onBackClicked: () -> Unit = {}
+    onBackClicked: () -> Unit = {},
+    onConnectionStateChanged: (Boolean) -> Unit = {},
+    onSensorDataReceived: (SensorPacket) -> Unit = {}
 ) {
     val context = LocalContext.current
     var isConnected by remember { mutableStateOf(false) }
@@ -132,12 +143,14 @@ fun BluetoothSensorScreen(
                         isConnected = true
                         deviceName = gatt?.device?.name ?: "Unknown Device"
                         statusMessage = "Connected to $deviceName"
+                        onConnectionStateChanged(true) // Add this line
                         gatt?.discoverServices()
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         isConnected = false
                         deviceName = "Not Connected"
                         statusMessage = "Disconnected"
+                        onConnectionStateChanged(false) // Add this line
                         bluetoothGatt?.close()
                         bluetoothGatt = null
                     }
@@ -176,6 +189,7 @@ fun BluetoothSensorScreen(
                             parseAndUpdatePacket(line) { packet ->
                                 latestPacket = packet
                                 packetHistory = (packetHistory + packet).takeLast(50) // Keep last 50 packets
+                                onSensorDataReceived(packet) // Add this line
                             }
                         }
                     }
@@ -243,7 +257,7 @@ fun BluetoothSensorScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(20.dp))
 
             Text(
                 text = "Smart Sole Sensor Monitor",

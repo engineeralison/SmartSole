@@ -1,4 +1,3 @@
-// Navigation.kt
 package com.example.smartsole
 
 import androidx.compose.runtime.*
@@ -10,26 +9,34 @@ import androidx.navigation.compose.rememberNavController
 fun Navigation() {
     val navController = rememberNavController()
 
-    NavHost(
-        navController = navController,
-        startDestination = "home"
-    ) {
+    var isBluetoothConnected by remember { mutableStateOf(false) }
+    var latestSensorData by remember { mutableStateOf<SensorPacket?>(null) }
+
+    NavHost(navController = navController, startDestination = "landing") {
+
+        composable("landing") {
+            LandingScreen(
+                onGetStartedClicked = { navController.navigate("home") }
+            )
+        }
+
         composable("home") {
             HomePage(
                 onStartRecordingClicked = {
-                    // Navigate to Bluetooth sensor page for recording
                     navController.navigate("bluetooth_sensor")
                 },
                 onViewGraphClicked = {
-                    // Navigate to your existing graph page
-                    // navController.navigate("graph")
+                    navController.navigate("live_pressure")
                 },
                 onViewHistoryClicked = {
-                    // Navigate to Bluetooth sensor page for history
                     navController.navigate("bluetooth_sensor")
                 },
+                onConnectBluetoothClicked = {
+                    navController.navigate("bluetooth_sensor")
+                },
+                isBluetoothConnected = isBluetoothConnected,
                 onBackClicked = {
-                    // Handle back navigation if needed
+                    // Handle back navigation
                 }
             )
         }
@@ -38,11 +45,55 @@ fun Navigation() {
             BluetoothSensorScreen(
                 onBackClicked = {
                     navController.popBackStack()
+                },
+                onConnectionStateChanged = { connected ->
+                    isBluetoothConnected = connected
+                },
+                onSensorDataReceived = { data ->
+                    latestSensorData = data
                 }
             )
         }
 
-        // Add other destinations as needed
-        // composable("graph") { YourGraphScreen() }
+        composable("live_pressure") {
+            LivePressureScreen(
+                isConnected = isBluetoothConnected,
+                sensorData = latestSensorData,
+                onBackClicked = {
+                    navController.popBackStack()
+                },
+                onConnectClicked = {
+                    navController.navigate("bluetooth_sensor")
+                }
+            )
+        }
+
+
+        // graph screen
+        composable("graph") {
+            GraphScreen(
+                onBackClicked = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // history screen
+        composable("history") {
+            HistoryLogScreen(
+                onBackClicked = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // data screen
+        composable("data") {
+            DataScreen(
+                onBackClicked = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
