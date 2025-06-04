@@ -49,12 +49,12 @@ fun LivePressureScreen(
     // Pressure sensor positions mapped to foot anatomy
     val pressureSensors = remember {
         mutableStateListOf(
-            PressureSensor(id = 5, xPercent = 0.20f, yPercent = 0.10f), // Toe area
-            PressureSensor(id = 4, xPercent = 0.24f, yPercent = 0.28f), // Ball of foot
-            PressureSensor(id = 3, xPercent = 0.50f, yPercent = 0.30f), // Arch
-            PressureSensor(id = 2, xPercent = 0.71f, yPercent = 0.39f), // Mid foot
-            PressureSensor(id = 1, xPercent = 0.58f, yPercent = 0.83f), // Heel front
-            PressureSensor(id = 0, xPercent = 0.44f, yPercent = 0.91f)  // Heel back
+            PressureSensor(id = 5, xPercent = 0.44f, yPercent = 0.91f),  // Heel back
+            PressureSensor(id = 4, xPercent = 0.58f, yPercent = 0.83f), // Heel front
+            PressureSensor(id = 3, xPercent = 0.71f, yPercent = 0.39f), // Mid foot
+            PressureSensor(id = 2, xPercent = 0.50f, yPercent = 0.30f), // Arch
+            PressureSensor(id = 1, xPercent = 0.24f, yPercent = 0.28f), // Ball of foot
+            PressureSensor(id = 0, xPercent = 0.20f, yPercent = 0.10f), // Toe area
         )
     }
 

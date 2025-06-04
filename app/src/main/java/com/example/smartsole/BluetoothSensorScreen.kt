@@ -68,6 +68,7 @@ data class SensorPacket(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BluetoothSensorScreen(
+    wasConnected: Boolean = false,
     onBackClicked: () -> Unit = {},
     onConnectionStateChanged: (Boolean) -> Unit = {},
     onSensorDataReceived: (SensorPacket) -> Unit = {}
@@ -143,14 +144,14 @@ fun BluetoothSensorScreen(
                         isConnected = true
                         deviceName = gatt?.device?.name ?: "Unknown Device"
                         statusMessage = "Connected to $deviceName"
-                        onConnectionStateChanged(true) // Add this line
+                        onConnectionStateChanged(true)
                         gatt?.discoverServices()
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         isConnected = false
                         deviceName = "Not Connected"
                         statusMessage = "Disconnected"
-                        onConnectionStateChanged(false) // Add this line
+                        onConnectionStateChanged(false)
                         bluetoothGatt?.close()
                         bluetoothGatt = null
                     }
@@ -179,7 +180,6 @@ fun BluetoothSensorScreen(
                     val data = String(it.value)
                     dataBuffer += data
 
-                    // Process complete lines (packets end with \n)
                     while (dataBuffer.contains('\n')) {
                         val lineEnd = dataBuffer.indexOf('\n')
                         val line = dataBuffer.substring(0, lineEnd).trim()
@@ -189,7 +189,7 @@ fun BluetoothSensorScreen(
                             parseAndUpdatePacket(line) { packet ->
                                 latestPacket = packet
                                 packetHistory = (packetHistory + packet).takeLast(50) // Keep last 50 packets
-                                onSensorDataReceived(packet) // Add this line
+                                onSensorDataReceived(packet)
                             }
                         }
                     }

@@ -43,6 +43,7 @@ fun Navigation() {
 
         composable("bluetooth_sensor") {
             BluetoothSensorScreen(
+                wasConnected = isBluetoothConnected,
                 onBackClicked = {
                     navController.popBackStack()
                 },
