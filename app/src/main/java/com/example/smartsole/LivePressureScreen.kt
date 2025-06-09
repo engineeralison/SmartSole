@@ -163,6 +163,7 @@ fun LivePressureScreen(
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .aspectRatio(0.6f)
+                    .offset(y = (-50).dp) // 👈 Move the whole box up (adjust -24 to your preference)
                     .onSizeChanged { size ->
                         footImageWidth = size.width
                         footImageHeight = size.height
@@ -218,12 +219,14 @@ fun LivePressureScreen(
                 }
 
                 // Pressure scale indicator
+                // Pressure scale indicator - now centered
                 Column(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
+                        .align(Alignment.BottomCenter)
+                        .offset(y = 70.dp), // 👈 pushes it downward (adjust as needed)
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
+                Text(
                         text = "Pressure Scale",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
