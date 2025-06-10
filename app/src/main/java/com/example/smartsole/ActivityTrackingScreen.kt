@@ -1,33 +1,36 @@
-// ActivityTrackingScreen.kt
 package com.example.smartsole
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
+import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.exp
 import kotlin.random.Random
 
-// Activity recognition models
+// Activity recognition models - Updated to 4 activities
 enum class ActivityType(val displayName: String, val color: Color, val icon: ImageVector) {
-    WALKING("Walking", Color(0xFF4CAF50), Icons.Default.DirectionsWalk),
-    RUNNING("Running", Color(0xFFFF5722), Icons.Default.DirectionsRun),
-    STANDING("Standing", Color(0xFF2196F3), Icons.Default.Accessibility),
     SITTING("Sitting", Color(0xFF9C27B0), Icons.Default.Chair),
-    CLIMBING_STAIRS("Climbing Stairs", Color(0xFFFF9800), Icons.Default.Stairs),
+    STANDING("Standing", Color(0xFF2196F3), Icons.Default.Accessibility),
+    WALKING("Walking", Color(0xFF4CAF50), Icons.AutoMirrored.Filled.DirectionsWalk),
+    STAIRS("Climbing Stairs", Color(0xFFFF9800), Icons.Default.Stairs),
     UNKNOWN("Unknown", Color(0xFF757575), Icons.Default.QuestionMark)
 }
 
@@ -40,67 +43,137 @@ data class ActivitySession(
     val calories: Int? = null
 )
 
-data class ActivityMetrics(
-    val currentActivity: ActivityType,
-    val confidence: Float,
-    val duration: String,
-    val totalSteps: Int,
-    val totalCalories: Int,
-    val sessionsToday: Int
-)
+// Simple TensorFlow Lite Activity Recognition for Shoe Insole
+class SimpleShoeInsoleAI(private val context: Context) {
+    private var interpreter: Interpreter? = null
+    private val dataBuffer = mutableListOf<FloatArray>()
+    private var isModelLoaded = false
+    private var sampleCount = 0
 
-// ML Activity Recognition Engine (Simplified)
-class ActivityRecognitionEngine {
-    private val activityPatterns = mapOf(
-        ActivityType.WALKING to listOf(
-            // Walking pattern: consistent medium pressure, rhythmic
-            listOf(200, 150, 100, 250, 300, 200),
-            listOf(180, 160, 120, 280, 320, 180)
-        ),
-        ActivityType.RUNNING to listOf(
-            // Running pattern: high pressure, rapid changes
-            listOf(400, 200, 150, 500, 600, 400),
-            listOf(450, 180, 120, 520, 650, 380)
-        ),
-        ActivityType.STANDING to listOf(
-            // Standing pattern: steady distributed pressure
-            listOf(150, 150, 150, 150, 150, 150),
-            listOf(140, 140, 140, 140, 140, 140)
-        )
+    // Updated to 4 activities in correct order
+    private val activityLabels = arrayOf(
+        "SITTING", "STAIRS", "STANDING", "WALKING"
     )
 
-    fun recognizeActivity(sensorData: List<Int>, historicalData: List<List<Int>>): Pair<ActivityType, Float> {
-        if (sensorData.all { it < 50 }) {
-            return Pair(ActivityType.SITTING, 0.95f)
-        }
-
-        val totalPressure = sensorData.sum()
-        val variance = calculateVariance(sensorData)
-        val maxPressure = sensorData.maxOrNull() ?: 0
-
-        return when {
-            totalPressure > 2000 && variance > 5000 -> Pair(ActivityType.RUNNING, 0.85f)
-            totalPressure > 800 && variance > 2000 -> Pair(ActivityType.WALKING, 0.78f)
-            totalPressure > 300 && variance < 1000 -> Pair(ActivityType.STANDING, 0.82f)
-            maxPressure > 800 && sensorData[1] > sensorData[4] -> Pair(ActivityType.CLIMBING_STAIRS, 0.72f)
-            else -> Pair(ActivityType.UNKNOWN, 0.45f)
+    suspend fun loadModel(): Boolean {
+        return try {
+            val modelBuffer = FileUtil.loadMappedFile(context, "smart_sole_model.tflite")
+            interpreter = Interpreter(modelBuffer)
+            isModelLoaded = true
+            Log.d("ShoeInsoleAI", "Model loaded successfully")
+            true
+        } catch (e: Exception) {
+            Log.e("ShoeInsoleAI", "Failed to load model: ${e.message}")
+            false
         }
     }
 
-    private fun calculateVariance(data: List<Int>): Double {
-        val mean = data.average()
-        return data.map { (it - mean) * (it - mean) }.average()
+    fun addSensorData(sensorPacket: SensorPacket): Pair<ActivityType, Float>? {
+        if (!isModelLoaded) return null
+
+        // Create normalized features: 6 FSR + 3 accel + 3 gyro = 12 features
+        val features = FloatArray(12)
+
+        // FSR sensors (0-5): normalize to 0-1
+        sensorPacket.fsrValues.forEachIndexed { i, value ->
+            if (i < 6) features[i] = (value / 1024f).coerceIn(0f, 1f)
+        }
+
+        // Accelerometer (6-8): normalize to -1 to 1
+        features[6] = (sensorPacket.accelX / 16384f).coerceIn(-1f, 1f)
+        features[7] = (sensorPacket.accelY / 16384f).coerceIn(-1f, 1f)
+        features[8] = (sensorPacket.accelZ / 16384f).coerceIn(-1f, 1f)
+
+        // Gyroscope (9-11): normalize to -1 to 1
+        features[9] = (sensorPacket.gyroX / 16384f).coerceIn(-1f, 1f)
+        features[10] = (sensorPacket.gyroY / 16384f).coerceIn(-1f, 1f)
+        features[11] = (sensorPacket.gyroZ / 16384f).coerceIn(-1f, 1f)
+
+        // Log the input features for debugging
+        Log.d("ShoeInsoleAI", "Raw FSR: [${sensorPacket.fsrValues.joinToString(",")}]")
+        Log.d("ShoeInsoleAI", "Raw IMU: accel=[${sensorPacket.accelX},${sensorPacket.accelY},${sensorPacket.accelZ}] gyro=[${sensorPacket.gyroX},${sensorPacket.gyroY},${sensorPacket.gyroZ}]")
+        Log.d("ShoeInsoleAI", "Processed features: [${features.joinToString(",") { "%.3f".format(it) }}]")
+
+        // Add to buffer
+        dataBuffer.add(features)
+        sampleCount++
+
+        // Keep exactly 20 samples
+        if (dataBuffer.size > 20) {
+            dataBuffer.removeAt(0)
+        }
+
+        // Run inference every 20 samples (when buffer is full)
+        if (dataBuffer.size == 20) {
+            return runInference()
+        }
+
+        return null
     }
 
-    fun generateFeedback(activity: ActivityType, confidence: Float, duration: String): String {
-        return when (activity) {
-            ActivityType.WALKING -> "Great pace! Keep up the steady walking rhythm."
-            ActivityType.RUNNING -> "Excellent workout! Your running form looks good."
-            ActivityType.STANDING -> "Good posture detected. Consider shifting weight occasionally."
-            ActivityType.SITTING -> "You've been sitting for $duration. Consider taking a short walk."
-            ActivityType.CLIMBING_STAIRS -> "Nice stair climbing! Great for cardiovascular health."
-            ActivityType.UNKNOWN -> "Activity pattern detected. Keep moving!"
+    private fun runInference(): Pair<ActivityType, Float> {
+        return try {
+            // Prepare input as 3D array for RNN: [batch, timestep, features]
+            val inputArray = Array(1) { Array(20) { FloatArray(12) } }
+
+            dataBuffer.forEachIndexed { timeIndex, features ->
+                features.copyInto(inputArray[0][timeIndex])
+            }
+
+            // Log the full input array being sent to the model
+            Log.d("ShoeInsoleAI", "=== FULL MODEL INPUT ===")
+            inputArray[0].forEachIndexed { timeIndex, features ->
+                Log.d("ShoeInsoleAI", "  Time $timeIndex: [${features.joinToString(",") { "%.3f".format(it) }}]")
+            }
+            Log.d("ShoeInsoleAI", "=== END MODEL INPUT ===")
+
+            val outputArray = Array(1) { FloatArray(4) }
+
+            interpreter?.run(inputArray, outputArray)
+
+            val probabilities = outputArray[0]
+
+            // Log model output
+            Log.d("ShoeInsoleAI", "Raw model output: [${probabilities.joinToString(",") { "%.6f".format(it) }}]")
+
+            // Apply softmax
+            val maxLogit = probabilities.maxOrNull() ?: 0f
+            val exps = probabilities.map { exp((it - maxLogit).toDouble()).toFloat() }
+            val sumExps = exps.sum()
+            val softmaxProbs = if (sumExps > 0) exps.map { it / sumExps }.toFloatArray() else probabilities
+
+            val maxIndex = softmaxProbs.indices.maxByOrNull { softmaxProbs[it] } ?: 0
+            val confidence = softmaxProbs[maxIndex]
+
+            Log.d("ShoeInsoleAI", "Softmax probs: [${softmaxProbs.joinToString(",") { "%.6f".format(it) }}]")
+            Log.d("ShoeInsoleAI", "Predicted index: $maxIndex, confidence: ${(confidence * 100).toInt()}%")
+
+            val activity = when (maxIndex) {
+                0 -> ActivityType.SITTING
+                1 -> ActivityType.STAIRS
+                2 -> ActivityType.STANDING
+                3 -> ActivityType.WALKING
+                else -> ActivityType.UNKNOWN
+            }
+
+            Log.d("ShoeInsoleAI", "Prediction: ${activityLabels[maxIndex]} (${(confidence * 100).toInt()}%)")
+            Pair(activity, confidence)
+
+        } catch (e: Exception) {
+            Log.e("ShoeInsoleAI", "Inference failed: ${e.message}")
+            Pair(ActivityType.UNKNOWN, 0f)
         }
+    }
+
+    fun getBufferStatus() = "${dataBuffer.size}/20 records"
+
+    fun reset() {
+        dataBuffer.clear()
+        sampleCount = 0
+    }
+
+    fun close() {
+        interpreter?.close()
     }
 }
 
@@ -112,101 +185,90 @@ fun ActivityTrackingScreen(
     onBackClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val recognitionEngine = remember { ActivityRecognitionEngine() }
+    val context = LocalContext.current
+    val aiEngine = remember { SimpleShoeInsoleAI(context) }
+    var isModelLoaded by remember { mutableStateOf(false) }
     var isTracking by remember { mutableStateOf(false) }
-    var currentMetrics by remember {
-        mutableStateOf(
-            ActivityMetrics(
-                currentActivity = ActivityType.UNKNOWN,
-                confidence = 0f,
-                duration = "00:00",
-                totalSteps = 0,
-                totalCalories = 0,
-                sessionsToday = 0
-            )
-        )
-    }
+    var bufferStatus by remember { mutableStateOf("0/20 records") }
 
-    var activitySessions by remember { mutableStateOf(listOf<ActivitySession>()) }
+    var currentActivity by remember { mutableStateOf(ActivityType.UNKNOWN) }
+    var confidence by remember { mutableStateOf(0f) }
     var sessionStartTime by remember { mutableStateOf(0L) }
-    var currentFeedback by remember { mutableStateOf("Connect your Smart Sole to start tracking") }
+    var duration by remember { mutableStateOf("00:00") }
+    var feedback by remember { mutableStateOf("Loading AI model...") }
+    var sessions by remember { mutableStateOf(listOf<ActivitySession>()) }
 
-    // Track activity recognition
-    LaunchedEffect(sensorData, isTracking) {
-        if (isTracking && sensorData != null) {
-            val (activity, confidence) = recognitionEngine.recognizeActivity(
-                sensorData.fsrValues,
-                emptyList() // Would store historical data in real implementation
-            )
-
-            val currentTime = System.currentTimeMillis()
-            val duration = if (sessionStartTime > 0) {
-                val diffMs = currentTime - sessionStartTime
-                val minutes = (diffMs / 60000).toInt()
-                val seconds = ((diffMs % 60000) / 1000).toInt()
-                String.format("%02d:%02d", minutes, seconds)
-            } else "00:00"
-
-            currentMetrics = currentMetrics.copy(
-                currentActivity = activity,
-                confidence = confidence,
-                duration = duration
-            )
-
-            currentFeedback = recognitionEngine.generateFeedback(activity, confidence, duration)
+    // Load model
+    LaunchedEffect(Unit) {
+        isModelLoaded = aiEngine.loadModel()
+        feedback = if (isModelLoaded) {
+            "AI model ready. Connect Smart Sole to start tracking."
+        } else {
+            "Failed to load model. Check smart_sole_model.tflite in assets."
         }
     }
 
-    // Animate confidence indicator
-    val infiniteTransition = rememberInfiniteTransition(label = "confidence_pulse")
-    val confidencePulse by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "confidence_pulse"
-    )
+    // Process sensor data
+    LaunchedEffect(sensorData, isTracking) {
+        if (isTracking && sensorData != null && isModelLoaded) {
+            bufferStatus = aiEngine.getBufferStatus()
 
-    Column(
-        modifier = modifier.fillMaxSize()
-    ) {
+            aiEngine.addSensorData(sensorData)?.let { (activity, conf) ->
+                currentActivity = activity
+                confidence = conf
+
+                if (sessionStartTime > 0) {
+                    val diffMs = System.currentTimeMillis() - sessionStartTime
+                    val minutes = (diffMs / 60000).toInt()
+                    val seconds = ((diffMs % 60000) / 1000).toInt()
+                    duration = String.format("%02d:%02d", minutes, seconds)
+                }
+
+                feedback = when (activity) {
+                    ActivityType.SITTING -> "💺 Sitting detected (${(conf * 100).toInt()}% confidence)"
+                    ActivityType.STANDING -> "🧍 Standing detected (${(conf * 100).toInt()}% confidence)"
+                    ActivityType.WALKING -> "🚶 Walking detected (${(conf * 100).toInt()}% confidence)"
+                    ActivityType.STAIRS -> "🪜 Stairs detected (${(conf * 100).toInt()}% confidence)"
+                    else -> "🔍 Analyzing movement patterns..."
+                }
+            }
+        }
+    }
+
+    // Cleanup
+    DisposableEffect(Unit) {
+        onDispose { aiEngine.close() }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
         // Header
         TopAppBar(
-            title = {
-                Text(
-                    text = "Activity Tracking",
-                    fontWeight = FontWeight.Bold
-                )
-            },
+            title = { Text("AI Activity Tracking", fontWeight = FontWeight.Bold) },
             navigationIcon = {
                 IconButton(onClick = onBackClicked) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                    )
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                 }
             },
             actions = {
-                if (isConnected) {
+                if (isConnected && isModelLoaded) {
                     IconButton(
                         onClick = {
                             if (isTracking) {
-                                // Stop tracking and save session
                                 if (sessionStartTime > 0) {
                                     val session = ActivitySession(
-                                        activity = currentMetrics.currentActivity,
+                                        activity = currentActivity,
                                         startTime = "Now",
-                                        duration = currentMetrics.duration,
-                                        confidence = currentMetrics.confidence,
+                                        duration = duration,
+                                        confidence = confidence,
                                         steps = Random.nextInt(50, 200),
                                         calories = Random.nextInt(10, 50)
                                     )
-                                    activitySessions = listOf(session) + activitySessions
+                                    sessions = listOf(session) + sessions
                                 }
                                 isTracking = false
                                 sessionStartTime = 0
+                                aiEngine.reset()
+                                bufferStatus = "0/20 records"
                             } else {
                                 isTracking = true
                                 sessionStartTime = System.currentTimeMillis()
@@ -215,7 +277,7 @@ fun ActivityTrackingScreen(
                     ) {
                         Icon(
                             imageVector = if (isTracking) Icons.Default.Stop else Icons.Default.PlayArrow,
-                            contentDescription = if (isTracking) "Stop Tracking" else "Start Tracking",
+                            contentDescription = if (isTracking) "Stop" else "Start",
                             tint = if (isTracking) Color.Red else Color.Green
                         )
                     }
@@ -223,267 +285,136 @@ fun ActivityTrackingScreen(
             }
         )
 
+        // Connection status
         if (!isConnected) {
-            // Connection prompt
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFFF5722).copy(alpha = 0.1f)
-                )
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFF5722).copy(alpha = 0.1f))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        imageVector = Icons.Default.BluetoothDisabled,
+                        Icons.Default.BluetoothDisabled,
                         contentDescription = "Not Connected",
                         modifier = Modifier.size(48.dp),
                         tint = Color(0xFFFF5722)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Connect Smart Sole for AI Activity Tracking",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = "Real-time ML-powered activity recognition requires sensor data",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
+                    Text("Connect Smart Sole for AI Tracking", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Requires 20Hz sensor data", fontSize = 14.sp, color = Color.Gray)
                 }
             }
-        } else {
-            // Current Activity Status
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = currentMetrics.currentActivity.color.copy(alpha = 0.1f)
+        }
+
+        // Model status
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isModelLoaded) Color(0xFF4CAF50).copy(alpha = 0.1f) else Color(0xFFFF5722).copy(alpha = 0.1f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isModelLoaded) Icons.Default.Psychology else Icons.Default.Warning,
+                        contentDescription = "Model Status",
+                        tint = if (isModelLoaded) Color(0xFF4CAF50) else Color(0xFFFF5722)
+                    )
+                    Text("TensorFlow Lite Model", fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    text = if (isModelLoaded) "4 activities: Sitting, Standing, Walking, Stairs" else "Model failed to load",
+                    fontSize = 12.sp,
+                    color = Color.Gray
                 )
+                if (isTracking) {
+                    Text("Buffer: $bufferStatus", fontSize = 12.sp, color = Color.Blue, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+
+        if (isConnected && isModelLoaded) {
+            // Current activity
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = currentActivity.color.copy(alpha = 0.1f))
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = currentMetrics.currentActivity.icon,
-                                contentDescription = currentMetrics.currentActivity.displayName,
-                                modifier = Modifier.size(32.dp),
-                                tint = currentMetrics.currentActivity.color
-                            )
-                            Column {
-                                Text(
-                                    text = currentMetrics.currentActivity.displayName,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Duration: ${currentMetrics.duration}",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-
-                        // Confidence indicator
-                        Box(
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Canvas(
-                                modifier = Modifier.size(60.dp)
-                            ) {
-                                val strokeWidth = 6.dp.toPx()
-                                val radius = (size.minDimension - strokeWidth) / 2
-
-                                // Background circle
-                                drawCircle(
-                                    color = Color.Gray.copy(alpha = 0.3f),
-                                    radius = radius,
-                                    style = Stroke(strokeWidth, cap = StrokeCap.Round)
-                                )
-
-                                // Confidence arc
-                                drawArc(
-                                    color = currentMetrics.currentActivity.color.copy(alpha = confidencePulse),
-                                    startAngle = -90f,
-                                    sweepAngle = 360f * currentMetrics.confidence,
-                                    useCenter = false,
-                                    style = Stroke(strokeWidth, cap = StrokeCap.Round)
-                                )
-                            }
-                            Text(
-                                text = "${(currentMetrics.confidence * 100).toInt()}%",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Icon(
+                            imageVector = currentActivity.icon,
+                            contentDescription = currentActivity.displayName,
+                            modifier = Modifier.size(32.dp),
+                            tint = currentActivity.color
+                        )
+                        Column {
+                            Text(currentActivity.displayName, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text("Duration: $duration", fontSize = 14.sp, color = Color.Gray)
                         }
                     }
+
+                    Text(
+                        text = "${(confidence * 100).toInt()}%",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = currentActivity.color
+                    )
                 }
             }
 
-            // AI Feedback
+            // AI feedback
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
-                )
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f))
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Psychology,
+                        Icons.Default.Psychology,
                         contentDescription = "AI Feedback",
                         modifier = Modifier.size(24.dp),
                         tint = Color(0xFF4CAF50)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = currentFeedback,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(feedback, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Today's Statistics
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DirectionsWalk,
-                            contentDescription = "Steps",
-                            tint = Color(0xFF2196F3)
-                        )
-                        Text(
-                            text = "${currentMetrics.totalSteps}",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Steps",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocalFireDepartment,
-                            contentDescription = "Calories",
-                            tint = Color(0xFFFF5722)
-                        )
-                        Text(
-                            text = "${currentMetrics.totalCalories}",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Calories",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Timeline,
-                            contentDescription = "Sessions",
-                            tint = Color(0xFF9C27B0)
-                        )
-                        Text(
-                            text = "${currentMetrics.sessionsToday}",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Sessions",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Activity History
+            // Session history
             Text(
-                text = "Recent Activity Sessions",
+                "Activity Sessions",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
 
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(activitySessions) { session ->
+                items(sessions) { session ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = session.activity.color.copy(alpha = 0.1f)
-                        )
+                        colors = CardDefaults.cardColors(containerColor = session.activity.color.copy(alpha = 0.1f))
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -492,76 +423,47 @@ fun ActivityTrackingScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Icon(
-                                    imageVector = session.activity.icon,
+                                    session.activity.icon,
                                     contentDescription = session.activity.displayName,
                                     modifier = Modifier.size(24.dp),
                                     tint = session.activity.color
                                 )
                                 Column {
+                                    Text(session.activity.displayName, fontWeight = FontWeight.Medium)
                                     Text(
-                                        text = session.activity.displayName,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = "${session.duration} • ${(session.confidence * 100).toInt()}% confidence",
+                                        "${session.duration} • ${(session.confidence * 100).toInt()}%",
                                         fontSize = 12.sp,
                                         color = Color.Gray
                                     )
                                 }
                             }
 
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                session.steps?.let {
-                                    Text(
-                                        text = "$it steps",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                                session.calories?.let {
-                                    Text(
-                                        text = "$it cal",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray
-                                    )
-                                }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                session.steps?.let { Text("$it steps", fontSize = 12.sp, color = Color.Gray) }
+                                session.calories?.let { Text("$it cal", fontSize = 12.sp, color = Color.Gray) }
                             }
                         }
                     }
                 }
 
-                if (activitySessions.isEmpty()) {
+                if (sessions.isEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.Gray.copy(alpha = 0.1f)
-                            )
+                            colors = CardDefaults.cardColors(containerColor = Color.Gray.copy(alpha = 0.1f))
                         ) {
                             Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
+                                modifier = Modifier.fillMaxWidth().padding(32.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.History,
+                                    Icons.Default.History,
                                     contentDescription = "No Sessions",
                                     modifier = Modifier.size(48.dp),
                                     tint = Color.Gray
                                 )
-                                Text(
-                                    text = "No activity sessions yet",
-                                    fontSize = 16.sp,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    text = "Start tracking to see your activity history",
-                                    fontSize = 12.sp,
-                                    color = Color.Gray
-                                )
+                                Text("No sessions yet", fontSize = 16.sp, color = Color.Gray)
+                                Text("Start tracking to see activity history", fontSize = 12.sp, color = Color.Gray)
                             }
                         }
                     }

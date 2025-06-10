@@ -29,7 +29,7 @@ fun Navigation() {
                     navController.navigate("live_pressure")
                 },
                 onViewHistoryClicked = {
-                    navController.navigate("bluetooth_sensor")
+                    navController.navigate("activity_tracking")
                 },
                 onConnectBluetoothClicked = {
                     navController.navigate("bluetooth_sensor")
@@ -65,6 +65,16 @@ fun Navigation() {
                 },
                 onConnectClicked = {
                     navController.navigate("bluetooth_sensor")
+                }
+            )
+        }
+
+        composable("activity_tracking") {
+            ActivityTrackingScreen(
+                isConnected = isBluetoothConnected,
+                sensorData = latestSensorData,
+                onBackClicked = {
+                    navController.popBackStack()
                 }
             )
         }
