@@ -246,23 +246,29 @@ fun BluetoothSensorScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Back button and header
+        // Back button and header
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBackClicked) {
+            IconButton(
+                onClick = onBackClicked,
+                modifier = Modifier.offset(x = (-11).dp, y = 12.dp) // Move arrow left and down
+            ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back"
                 )
             }
 
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(5.dp)) // Adjust spacing between icon and text
 
             Text(
                 text = "Smart Sole Sensor Monitor",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                modifier = Modifier.offset(x = (-11).dp, y = 12.dp) // Move text left and down
             )
         }
 

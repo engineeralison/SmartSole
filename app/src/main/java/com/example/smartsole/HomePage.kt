@@ -22,6 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
 
 @Composable
 fun HomePage(
@@ -40,12 +44,40 @@ fun HomePage(
     var timeOnFeet by remember { mutableStateOf("4h 32m") }
     var lastUpdated by remember { mutableStateOf("Just now") }
 
+    // text for date
+    val formattedDate = remember {
+        LocalDate.now().format(
+            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.getDefault())
+        )
+    }
+    // motivational quotes
+    val motivationalQuotes = listOf(
+        "You’ve got this!",
+        "One step at a time.",
+        "Keep moving forward.",
+        "Progress, not perfection.",
+        "Push yourself — no one else will do it for you.",
+        "Stay strong, your future self will thank you.",
+        "Discipline over motivation.",
+        "Fall seven times, stand up eight."
+    )
+    var currentQuote by remember { mutableStateOf(motivationalQuotes.random()) }
+
+
+
     // simulate real-time updates for demo
     LaunchedEffect(Unit) {
         while (true) {
             delay(30000) // Update every 30 seconds
             dailySteps += (1..5).random()
             lastUpdated = "Just now"
+        }
+    }
+    // for quotes, changes every minute
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000) // Update every minute
+            currentQuote = motivationalQuotes.random()
         }
     }
 
@@ -65,80 +97,57 @@ fun HomePage(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp) // Space between Pressure Plot & Foot History
         ) {
             // Top spacing
-            Spacer(modifier = Modifier.height(120.dp))
+            Spacer(modifier = Modifier.height(130.dp))
 
-            // Daily Stats Cards Row
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp) // Use spacing directly
             ) {
-                // Steps Card
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                // Steps Today button (takes equal space)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .aspectRatio(1f), // Keeps it square
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DirectionsWalk,
-                            contentDescription = "Steps",
-                            tint = Color(0xFF2196F3),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = dailySteps.toString(),
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                        Text(
-                            text = "Steps Today",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.steps_today),
+                        contentDescription = "Steps Today",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Text(
+                        text = "$dailySteps steps",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        modifier = Modifier.offset(x = (-27).dp, y = 12.dp)
+                    )
                 }
 
-                // Time on Feet Card
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                // Time on Feet button (same size as above)
+                Box(
+                    modifier = Modifier
+                        .weight(1.01f)
+                        .aspectRatio(1f),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Timer,
-                            contentDescription = "Time",
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = timeOnFeet,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                        Text(
-                            text = "Time on Feet",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.time_on_feet),
+                        contentDescription = "Time on Feet",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Text(
+                        text = timeOnFeet,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        modifier = Modifier.offset(x = (-40).dp, y = 10.dp)
+                    )
                 }
             }
 
@@ -156,7 +165,7 @@ fun HomePage(
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Pressure Plot Button
             Image(
@@ -168,7 +177,7 @@ fun HomePage(
                     .clickable(onClick = onViewGraphClicked)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(0.dp))
 
             // Original Foot History Button
             Image(
@@ -180,7 +189,27 @@ fun HomePage(
                     .clickable(onClick = onViewHistoryClicked)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(40.dp))
+
+            // Current Day and Motivational Quote
+            Text(
+                text = formattedDate,
+                fontSize = 18.sp,
+                color = Color.Black,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "\"$currentQuote\"",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                modifier = Modifier
+                    .background(Color(0xFF424242).copy(alpha = 0.7f), shape = RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            )
 
             // Bluetooth Connection Status Card
             Card(
@@ -189,7 +218,7 @@ fun HomePage(
                     containerColor = if (isBluetoothConnected)
                         Color(0xFF4CAF50).copy(alpha = 0.9f)
                     else
-                        Color(0xFFFF5722).copy(alpha = 0.9f)
+                        Color(0x00000000).copy(alpha = 0.9f)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
@@ -233,7 +262,7 @@ fun HomePage(
                             onClick = onConnectBluetoothClicked,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.White,
-                                contentColor = Color(0xFFFF5722)
+                                contentColor = Color.Black
                             )
                         ) {
                             Text("Connect")
