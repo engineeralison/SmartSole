@@ -222,8 +222,6 @@ fun HomePage(
         "One step at a time.",
         "Keep moving forward.",
         "Progress, not perfection.",
-        "Push yourself — no one else will do it for you.",
-        "Stay strong, your future self will thank you.",
         "Discipline over motivation.",
         "Fall seven times, stand up eight."
     )
@@ -329,7 +327,6 @@ fun HomePage(
                 )
             }
 
-            Spacer(modifier = Modifier.height((-30).dp))
 
             // Pressure Plot Button
             Image(
@@ -341,8 +338,6 @@ fun HomePage(
                     .clickable(onClick = onViewGraphClicked)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
-
             // Original Foot History Button
             Image(
                 painter = painterResource(id = R.drawable.foot_history),
@@ -353,7 +348,7 @@ fun HomePage(
                     .clickable(onClick = onViewHistoryClicked)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Current Day and Motivational Quote
             Text(
@@ -363,7 +358,7 @@ fun HomePage(
                 fontWeight = FontWeight.Medium
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "\"$currentQuote\"",

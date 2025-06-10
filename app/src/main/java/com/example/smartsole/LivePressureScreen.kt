@@ -163,7 +163,7 @@ fun LivePressureScreen(
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .aspectRatio(0.6f)
-                    .offset(y = (-45).dp) // 👈 Move the whole box up (adjust -24 to your preference)
+                    .offset(y = (-40).dp) // 👈 Move the whole box up (adjust -24 to your preference)
                     .onSizeChanged { size ->
                         footImageWidth = size.width
                         footImageHeight = size.height

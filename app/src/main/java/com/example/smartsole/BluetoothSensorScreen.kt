@@ -63,8 +63,6 @@ data class SensorPacket(
     val connectionStatus: String = "DISC"
 )
 
-
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BluetoothSensorScreen(
@@ -74,11 +72,12 @@ fun BluetoothSensorScreen(
     onSensorDataReceived: (SensorPacket) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var isConnected by remember { mutableStateOf(false) }
-    var deviceName by remember { mutableStateOf("Not Connected") }
+    // Initialize connection state with the passed parameter
+    var isConnected by remember { mutableStateOf(wasConnected) }
+    var deviceName by remember { mutableStateOf(if (wasConnected) "nRF52-Sensors" else "Not Connected") }
     var latestPacket by remember { mutableStateOf(SensorPacket()) }
     var packetHistory by remember { mutableStateOf(listOf<SensorPacket>()) }
-    var statusMessage by remember { mutableStateOf("Ready to connect") }
+    var statusMessage by remember { mutableStateOf(if (wasConnected) "Connected to nRF52-Sensors" else "Ready to connect") }
     var hasPermissions by remember { mutableStateOf(false) }
 
     val bluetoothManager = remember {
@@ -94,6 +93,11 @@ fun BluetoothSensorScreen(
 
     var bluetoothGatt by remember { mutableStateOf<BluetoothGatt?>(null) }
     var dataBuffer by remember { mutableStateOf("") }
+
+    // Update the parent component when connection state changes locally
+    LaunchedEffect(isConnected) {
+        onConnectionStateChanged(isConnected)
+    }
 
     // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -130,7 +134,9 @@ fun BluetoothSensorScreen(
         if (!hasPermissions) {
             permissionLauncher.launch(requiredPermissions)
         } else {
-            statusMessage = "Ready to connect"
+            if (!wasConnected) {
+                statusMessage = "Ready to connect"
+            }
         }
     }
 
@@ -144,14 +150,12 @@ fun BluetoothSensorScreen(
                         isConnected = true
                         deviceName = gatt?.device?.name ?: "Unknown Device"
                         statusMessage = "Connected to $deviceName"
-                        onConnectionStateChanged(true)
                         gatt?.discoverServices()
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         isConnected = false
                         deviceName = "Not Connected"
                         statusMessage = "Disconnected"
-                        onConnectionStateChanged(false)
                         bluetoothGatt?.close()
                         bluetoothGatt = null
                     }
@@ -223,8 +227,8 @@ fun BluetoothSensorScreen(
         }
 
         if (targetDevice != null) {
-            statusMessage = "Connecting to ${targetDevice.name}..."
-            bluetoothGatt = targetDevice.connectGatt(context, false, gattCallback)
+            statusMessage = "Connecting to ${targetDevice!!.name}..."
+            bluetoothGatt = targetDevice!!.connectGatt(context, false, gattCallback)
         } else {
             statusMessage = "Device 'nRF52-Sensors' not found in paired devices. Please pair first."
         }
@@ -245,7 +249,6 @@ fun BluetoothSensorScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Back button and header
         // Back button and header
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -319,175 +322,29 @@ fun BluetoothSensorScreen(
             }
         }
 
-        // Latest Data Display
+        // Simple connection success message
         if (isConnected) {
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
+                )
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Latest Sensor Data",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = "✓ Device Connected Successfully",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // FSR Values
                     Text(
-                        text = "Force Sensors:",
-                        fontWeight = FontWeight.Medium
+                        text = "Your Smart Sole is now streaming data to the app",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        latestPacket.fsrValues.forEachIndexed { index, value ->
-                            Card(
-                                modifier = Modifier.weight(1f),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (value > 100) Color(0xFFE3F2FD) else Color(0xFFF5F5F5)
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "F$index",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = value.toString(),
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // IMU Data
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Accelerometer
-                        Card(modifier = Modifier.weight(1f)) {
-                            Column(
-                                modifier = Modifier.padding(8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Accelerometer",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text("X: ${latestPacket.accelX}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                                Text("Y: ${latestPacket.accelY}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                                Text("Z: ${latestPacket.accelZ}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                            }
-                        }
-
-                        // Gyroscope
-                        Card(modifier = Modifier.weight(1f)) {
-                            Column(
-                                modifier = Modifier.padding(8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Gyroscope",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text("X: ${latestPacket.gyroX}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                                Text("Y: ${latestPacket.gyroY}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                                Text("Z: ${latestPacket.gyroZ}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Status Info
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Temp: ${latestPacket.temperature}°C",
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "Packet: ${latestPacket.packetNumber}",
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "Status: ${getStatusText(latestPacket.status)}",
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = when (latestPacket.status) {
-                                0 -> Color.Green
-                                1 -> Color.Blue
-                                else -> Color.Red
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Packet History
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Packet History (Latest ${packetHistory.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val listState = rememberLazyListState()
-
-                    LaunchedEffect(packetHistory.size) {
-                        if (packetHistory.isNotEmpty()) {
-                            listState.animateScrollToItem(packetHistory.size - 1)
-                        }
-                    }
-
-                    LazyColumn(
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(packetHistory) { packet ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp)),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = formatPacketForDisplay(packet),
-                                    modifier = Modifier.padding(8.dp),
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
