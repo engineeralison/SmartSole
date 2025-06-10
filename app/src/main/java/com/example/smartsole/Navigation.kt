@@ -1,10 +1,13 @@
 package com.example.smartsole
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun Navigation() {
     val navController = rememberNavController()
@@ -35,6 +38,7 @@ fun Navigation() {
                     navController.navigate("bluetooth_sensor")
                 },
                 isBluetoothConnected = isBluetoothConnected,
+                sensorData = latestSensorData, // Pass sensor data to HomePage
                 onBackClicked = {
                     // Handle back navigation
                 }
@@ -49,6 +53,10 @@ fun Navigation() {
                 },
                 onConnectionStateChanged = { connected ->
                     isBluetoothConnected = connected
+                    // Clear sensor data when disconnected
+                    if (!connected) {
+                        latestSensorData = null
+                    }
                 },
                 onSensorDataReceived = { data ->
                     latestSensorData = data
@@ -78,7 +86,6 @@ fun Navigation() {
                 }
             )
         }
-
 
         // graph screen
         composable("graph") {
