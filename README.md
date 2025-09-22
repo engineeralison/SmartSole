@@ -1,6 +1,7 @@
 # 👟 Smart Sole: IoT-Enabled Foot Pressure Monitoring System
 
 ## Overview
+Website Link: https://sites.google.com/uw.edu/smartsole/lab-notebook/week-9-10
 
 **Smart Sole** is a wearable IoT system designed to monitor **foot pressure distribution** in real time using embedded sensors, Bluetooth Low Energy (BLE), and an Android mobile application. This system aims to provide insights into posture, gait analysis, and injury prevention, and is compatible with various shoe types for users ranging from athletes to physical therapy patients.
 
